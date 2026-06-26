@@ -49,8 +49,10 @@ fi
 cd "$SRC"
 
 # 3. Build. This compiles Rust + the frontend; first run takes a few minutes.
+#    --config.strict-dep-builds=false stops pnpm 10+ from failing on the
+#    esbuild build-script gate (it otherwise exits non-zero and aborts).
 info "Installing frontend packages…"
-pnpm install --silent
+pnpm install --config.strict-dep-builds=false --silent
 info "Building (this can take a few minutes the first time)…"
 pnpm tauri build --bundles deb >/dev/null
 
