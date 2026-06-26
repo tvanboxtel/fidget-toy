@@ -24,13 +24,14 @@ const reattachLen = () => settings.stringLen * 0.9; // release within → re-tie
 // ---------------------------------------------------------------------------
 // Fixed tuning — not exposed in the UI (internal feel constants).
 // ---------------------------------------------------------------------------
-const GRAB_PAD = 22; // extra clickable margin around the ball (forgiving grab)
+const GRAB_PAD = 34; // extra clickable margin around the ball (forgiving grab)
 const STRING_DAMP = 10; // damping on the stretch (1/s) — kills the boing
 const FRICTION = 0.99; // air/rolling damping per frame
 const MAX_FLING = 4000; // clamp release velocity (px/s)
 const BAT_MAX = 1900; // clamp a single bat's resulting speed (px/s)
-const BAT_MIN_SPEED = 250; // ignore slow hovers (px/s) so resting near the ball
-//                            doesn't nudge it
+const BAT_MIN_SPEED = 650; // need a deliberate SWIPE to bonk the ball (px/s).
+//                            A normal "move in to grab it" stays under this, so
+//                            approaching the ball no longer bats it away.
 const SQUASH_DECAY = 9; // how fast squash eases back (higher = snappier)
 const SQUASH_GAIN = 0.0016; // squash amount per px/s of impact speed
 

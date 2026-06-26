@@ -100,3 +100,49 @@ input[type="color"] {
 .reset:active {
   background: #2a2f38;
 }
+
+.update {
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid #2c313b;
+}
+
+.update-btn {
+  width: 100%;
+  padding: 9px;
+  font-size: 13px;
+  color: #c9ccd2;
+  background: transparent;
+  border: 1px solid #3a3f4b;
+  border-radius: 10px;
+  cursor: pointer;
+}
+
+.update-btn:hover {
+  background: #2c313b;
+}
+
+.update-btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.update-status {
+  margin: 8px 0 0;
+  min-height: 16px;
+  font-size: 12px;
+  text-align: center;
+  color: #8a909a;
+}
+
+.update-status.ok {
+  color: #6fcf97;
+}
+
+.update-status.available {
+  color: #ffcf5c;
+}
+
+.update-status.error {
+  color: #eb5757;
+}

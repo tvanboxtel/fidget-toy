@@ -69,10 +69,51 @@ fn cursor_pos(_window: Window) -> Result<(f64, f64), String> {
     Ok((-1.0, -1.0))
 }
 
+/// The running app's version (baked in at compile time from Cargo.toml). The
+/// settings window compares this against the latest GitHub release.
+#[tauri::command]
+fn current_version() -> String {
+    env!("CARGO_PKG_VERSION").to_string()
+}
+
+/// Open a URL in the user's default browser. Used by the "Get the update"
+/// button to send people to the releases page. We shell out to the platform
+/// opener rather than pulling in a plugin.
+#[tauri::command]
+fn open_url(url: String) -> Result<(), String> {
+    #[cfg(target_os = "linux")]
+    let mut cmd = {
+        let mut c = std::process::Command::new("xdg-open");
+        c.arg(&url);
+        c
+    };
+    #[cfg(target_os = "macos")]
+    let mut cmd = {
+        let mut c = std::process::Command::new("open");
+        c.arg(&url);
+        c
+    };
+    #[cfg(target_os = "windows")]
+    let mut cmd = {
+        // `start` is a cmd builtin; the empty "" is the window-title arg it eats.
+        let mut c = std::process::Command::new("cmd");
+        c.args(["/C", "start", "", &url]);
+        c
+    };
+
+    cmd.spawn().map_err(|e| e.to_string())?;
+    Ok(())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
-        .invoke_handler(tauri::generate_handler![set_input_region, cursor_pos])
+        .invoke_handler(tauri::generate_handler![
+            set_input_region,
+            cursor_pos,
+            current_version,
+            open_url
+        ])
         .setup(|app| {
             // The window is borderless and lives in the tray, so the tray menu
             // is the only way to reach settings or quit.

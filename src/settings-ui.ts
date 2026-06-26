@@ -6,6 +6,7 @@ import {
   loadSettings,
   saveSettings,
 } from "./settings";
+import { checkForUpdate, openReleasesPage } from "./update";
 
 let settings = loadSettings();
 
@@ -79,4 +80,42 @@ resetBtn.addEventListener("click", () => {
   refreshers.forEach((r) => r());
   colorInput.value = settings.color;
   commit();
+});
+
+// ---------------------------------------------------------------------------
+// Check for updates. We don't auto-update (no code-signing keys); we just tell
+// the user a newer version exists and the button then opens the download page.
+// ---------------------------------------------------------------------------
+const updateBtn = document.getElementById("check-update") as HTMLButtonElement;
+const updateStatus = document.getElementById("update-status")!;
+
+// Tracks whether clicking the button checks (default) or opens the download
+// page (after an update has been found).
+let openOnClick = false;
+
+updateBtn.addEventListener("click", async () => {
+  if (openOnClick) {
+    openReleasesPage();
+    return;
+  }
+
+  updateBtn.disabled = true;
+  updateStatus.className = "update-status";
+  updateStatus.textContent = "Checking…";
+
+  const result = await checkForUpdate();
+  updateBtn.disabled = false;
+
+  if (result.state === "available") {
+    openOnClick = true;
+    updateBtn.textContent = `Get ${result.latest} →`;
+    updateStatus.className = "update-status available";
+    updateStatus.textContent = `Update available (you have v${result.version}).`;
+  } else if (result.state === "current") {
+    updateStatus.className = "update-status ok";
+    updateStatus.textContent = `You're up to date (v${result.version}).`;
+  } else {
+    updateStatus.className = "update-status error";
+    updateStatus.textContent = `Couldn't check: ${result.message}`;
+  }
 });

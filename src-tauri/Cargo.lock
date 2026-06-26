@@ -735,7 +735,7 @@ dependencies = [
 
 [[package]]
 name = "fidget-toy"
-version = "0.1.2"
+version = "0.1.3"
 dependencies = [
  "gtk",
  "serde",
