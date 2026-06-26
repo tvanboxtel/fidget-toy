@@ -35,18 +35,44 @@ fn set_input_region(window: Window, x: i32, y: i32, w: i32, h: i32) -> Result<()
     Ok(())
 }
 
-/// No-op on non-Linux targets; those platforms use a different click-through
-/// strategy (global-cursor poll). Kept so the frontend can call it everywhere.
+/// No-op on non-Linux targets; those platforms use the global-cursor poll +
+/// set_ignore_cursor_events strategy instead. Kept so the frontend can call it
+/// everywhere without per-platform branching.
 #[cfg(not(target_os = "linux"))]
 #[tauri::command]
 fn set_input_region(_window: Window, _x: i32, _y: i32, _w: i32, _h: i32) -> Result<(), String> {
     Ok(())
 }
 
+/// Cursor position in logical (CSS) pixels relative to the window's top-left.
+///
+/// Used on macOS/Windows for click-through: the whole window ignores cursor
+/// events by default, and the frontend polls this to toggle that off only while
+/// the cursor is over the ball. (Linux can't rely on this under Wayland, so it
+/// uses the input-shape approach in set_input_region instead.)
+#[cfg(not(target_os = "linux"))]
+#[tauri::command]
+fn cursor_pos(window: Window) -> Result<(f64, f64), String> {
+    let global = window.cursor_position().map_err(|e| e.to_string())?;
+    let origin = window.outer_position().map_err(|e| e.to_string())?;
+    let scale = window.scale_factor().map_err(|e| e.to_string())?;
+    let x = (global.x - origin.x as f64) / scale;
+    let y = (global.y - origin.y as f64) / scale;
+    Ok((x, y))
+}
+
+/// On Linux this is never called (input-shape handles click-through), but the
+/// command must exist so generate_handler! resolves on every platform.
+#[cfg(target_os = "linux")]
+#[tauri::command]
+fn cursor_pos(_window: Window) -> Result<(f64, f64), String> {
+    Ok((-1.0, -1.0))
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
-        .invoke_handler(tauri::generate_handler![set_input_region])
+        .invoke_handler(tauri::generate_handler![set_input_region, cursor_pos])
         .setup(|app| {
             // The window is borderless and lives in the tray, so the tray menu
             // is the only way to reach settings or quit.

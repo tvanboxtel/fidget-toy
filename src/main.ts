@@ -1,6 +1,15 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import { SETTINGS_EVENT, loadSettings, type Settings } from "./settings";
+
+// Click-through strategy differs by platform:
+//  - Linux:        GTK input shape (set_input_region) — Wayland can't report
+//                  the global cursor, so we restrict the window's input region.
+//  - macOS/Win:    poll the global cursor + toggle setIgnoreCursorEvents.
+// We detect Linux at runtime; everything else uses the cursor-poll path.
+const IS_LINUX = navigator.userAgent.includes("Linux");
+const appWindow = getCurrentWindow();
 
 // ---------------------------------------------------------------------------
 // User-tunable settings (driven by the control center). Loaded from shared
@@ -118,6 +127,7 @@ function overBall(px: number, py: number, pad = GRAB_PAD): boolean {
 // ---------------------------------------------------------------------------
 let lastRegion = "";
 
+// Linux path: restrict the window's GTK input shape to the ball's bounding box.
 function updateInputRegion() {
   let left: number;
   let top: number;
@@ -151,6 +161,41 @@ function updateInputRegion() {
       lastRegion = "";
     },
   );
+}
+
+// macOS/Windows path: the whole window ignores cursor events by default, so
+// clicks fall through to windows behind it (e.g. the settings panel). We poll
+// the global cursor and disable ignore only while it's over the ball — and
+// while dragging, so a fast drag doesn't slip off and drop the ball.
+let ignoring: boolean | null = null; // current OS state; null = not yet set
+
+async function setIgnore(ignore: boolean) {
+  if (ignore === ignoring) return;
+  ignoring = ignore;
+  try {
+    await appWindow.setIgnoreCursorEvents(ignore);
+  } catch {
+    ignoring = null; // retry next tick
+  }
+}
+
+async function updateCursorClickThrough() {
+  if (dragging) {
+    await setIgnore(false);
+    return;
+  }
+  try {
+    const [cx, cy] = await invoke<[number, number]>("cursor_pos");
+    await setIgnore(!overBall(cx, cy));
+  } catch {
+    /* window not ready yet */
+  }
+}
+
+// Dispatch to the right strategy each frame.
+function updateClickThrough() {
+  if (IS_LINUX) updateInputRegion();
+  else void updateCursorClickThrough();
 }
 
 // ---------------------------------------------------------------------------
@@ -486,8 +531,10 @@ function frame(now: number) {
   if (idleFrames < SLEEP_AFTER) {
     step(dt);
     draw();
-    updateInputRegion();
   }
+  // Click-through must keep running even while the ball sleeps, so the cursor
+  // poll (macOS/Win) can still detect hover over a resting ball and wake it.
+  updateClickThrough();
   requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);
