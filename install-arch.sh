@@ -23,11 +23,17 @@ command -v pacman >/dev/null || fail "This installer is for Arch-based distros (
 
 bold "🔴 Installing Fidget Toy (building from source for your system)…"
 
-# 1. Build dependencies. --needed skips anything already installed.
-info "Installing build dependencies (you'll be asked for your password)…"
-sudo pacman -S --needed --noconfirm \
-  base-devel git rust nodejs pnpm \
-  webkit2gtk-4.1 libayatana-appindicator librsvg \
+# 1. Build dependencies. We only install a package if the tool it provides is
+#    missing — this avoids conflicts when you already have node/rust/pnpm from a
+#    different package (e.g. nodejs-lts-* instead of nodejs, or rustup).
+info "Checking build dependencies…"
+pkgs=(base-devel git webkit2gtk-4.1 libayatana-appindicator librsvg)
+command -v node  >/dev/null || pkgs+=(nodejs)
+command -v pnpm  >/dev/null || pkgs+=(pnpm)
+command -v cargo >/dev/null || pkgs+=(rust)
+
+info "Installing: ${pkgs[*]} (you'll be asked for your password)…"
+sudo pacman -S --needed --noconfirm "${pkgs[@]}" \
   || fail "Failed to install dependencies."
 
 # 2. Get the source (fresh clone, or update an existing one).
