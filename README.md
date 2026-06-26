@@ -27,6 +27,20 @@ That downloads the right version for your computer and installs it. On Mac it ev
 
 > To open a terminal: **Mac** → Spotlight (⌘+Space), type "Terminal". **Windows** → Start menu, type "PowerShell". **Linux** → you know how.
 
+#### 🐧 Arch Linux (and "Could not create default EGL display" on any Linux)
+
+The portable `.AppImage` bundles a browser engine that fails to start on some
+newer Linux setups (commonly Arch + Wayland + certain GPUs) — you'll see
+`Could not create default EGL display`. On Arch, build from source instead so it
+uses *your* system's engine (one `sudo` prompt, compiles in a few minutes):
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/tvanboxtel/fidget-toy/main/install-arch.sh | bash
+```
+
+On other distros that hit this, install the **`.deb`** (Debian/Ubuntu) or
+**`.rpm`** (Fedora) instead of the AppImage — those use your system engine too.
+
 ---
 
 ### 🖱️ The click-around way

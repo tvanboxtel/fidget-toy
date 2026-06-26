@@ -1,20 +1,24 @@
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
+import { SETTINGS_EVENT, loadSettings, type Settings } from "./settings";
 
 // ---------------------------------------------------------------------------
-// Tuning — the "feel" lives here. See BUILD_PLAN section 5.
+// User-tunable settings (driven by the control center). Loaded from shared
+// storage at startup; updated live when the settings window broadcasts.
 // ---------------------------------------------------------------------------
-const RADIUS = 44; // ball radius in CSS px
+let settings: Settings = loadSettings();
+
+// Derived helpers for values built from settings.
+const breakLen = () => settings.stringLen * 1.85; // pull past this → rope snaps
+const reattachLen = () => settings.stringLen * 0.9; // release within → re-tie
+
+// ---------------------------------------------------------------------------
+// Fixed tuning — not exposed in the UI (internal feel constants).
+// ---------------------------------------------------------------------------
 const GRAB_PAD = 22; // extra clickable margin around the ball (forgiving grab)
-const GRAVITY = 1500; // px/s^2
-const STRING_LEN = 260; // resting length of the string (px)
-const STRING_K = 180; // string spring stiffness (1/s^2) when stretched
 const STRING_DAMP = 10; // damping on the stretch (1/s) — kills the boing
-const BREAK_LEN = STRING_LEN * 1.85; // stretch past this and the rope snaps
-const REATTACH_LEN = STRING_LEN * 0.9; // release within this of anchor to re-tie
-const RESTITUTION = 0.5; // wall bounciness once the ball is free
 const FRICTION = 0.99; // air/rolling damping per frame
 const MAX_FLING = 4000; // clamp release velocity (px/s)
-const BAT_FORCE = 0.65; // fraction of cursor speed transferred when batting
 const BAT_MAX = 1900; // clamp a single bat's resulting speed (px/s)
 const BAT_MIN_SPEED = 250; // ignore slow hovers (px/s) so resting near the ball
 //                            doesn't nudge it
@@ -51,7 +55,7 @@ window.addEventListener("resize", resize);
 // Physics state — the ball hangs from the anchor on a string.
 // ---------------------------------------------------------------------------
 let x = W / 2;
-let y = STRING_LEN;
+let y = settings.stringLen;
 let vx = 0;
 let vy = 0;
 
@@ -99,7 +103,7 @@ function flingVelocity(): { vx: number; vy: number } {
 // Hit test for grabbing. `pad` widens the catch radius so you don't have to be
 // pixel-perfect on the moving ball. Batting passes pad=0 for a tight test.
 function overBall(px: number, py: number, pad = GRAB_PAD): boolean {
-  return Math.hypot(px - x, py - y) <= RADIUS + pad;
+  return Math.hypot(px - x, py - y) <= settings.radius + pad;
 }
 
 // ---------------------------------------------------------------------------
@@ -132,9 +136,9 @@ function updateInputRegion() {
     // At rest, only the ball (plus a forgiving grab margin) is interactive so
     // clicks pass through elsewhere.
     const pad = GRAB_PAD;
-    left = Math.floor(x - RADIUS - pad);
-    top = Math.floor(y - RADIUS - pad);
-    w = Math.ceil(RADIUS * 2 + pad * 2);
+    left = Math.floor(x - settings.radius - pad);
+    top = Math.floor(y - settings.radius - pad);
+    w = Math.ceil(settings.radius * 2 + pad * 2);
     h = w;
   }
 
@@ -164,6 +168,7 @@ canvas.addEventListener("pointerdown", (e) => {
   pushSample(e.clientX, e.clientY, e.timeStamp);
   canvas.setPointerCapture(e.pointerId);
   canvas.classList.add("grabbing");
+  wake();
 });
 
 // Previous hover sample, for computing cursor speed when batting the ball.
@@ -178,7 +183,7 @@ canvas.addEventListener("pointermove", (e) => {
     pushSample(e.clientX, e.clientY, e.timeStamp);
 
     // Pull hard enough and the rope snaps.
-    if (attached && Math.hypot(x - anchorX, y - anchorY) > BREAK_LEN) {
+    if (attached && Math.hypot(x - anchorX, y - anchorY) > breakLen()) {
       attached = false;
       const ang = Math.atan2(y - anchorY, x - anchorX);
       impact(900, ang); // a satisfying snap squash
@@ -224,14 +229,15 @@ canvas.addEventListener("pointermove", (e) => {
   }
 
   if (bestSpeed > BAT_MIN_SPEED) {
-    vx += bestVX * BAT_FORCE;
-    vy += bestVY * BAT_FORCE;
+    vx += bestVX * settings.batForce;
+    vy += bestVY * settings.batForce;
     const s = Math.hypot(vx, vy);
     if (s > BAT_MAX) {
       vx *= BAT_MAX / s;
       vy *= BAT_MAX / s;
     }
-    impact(bestSpeed * BAT_FORCE, Math.atan2(bestVY, bestVX));
+    impact(bestSpeed * settings.batForce, Math.atan2(bestVY, bestVX));
+    wake();
   }
 
   hoverPX = e.clientX;
@@ -249,7 +255,7 @@ function endDrag(e: PointerEvent) {
   vy = f.vy;
 
   // Dropped the loose ball back up near the anchor? Re-tie the rope.
-  if (!attached && Math.hypot(x - anchorX, y - anchorY) <= REATTACH_LEN) {
+  if (!attached && Math.hypot(x - anchorX, y - anchorY) <= reattachLen()) {
     attached = true;
   }
   try {
@@ -260,6 +266,21 @@ function endDrag(e: PointerEvent) {
 }
 canvas.addEventListener("pointerup", endDrag);
 canvas.addEventListener("pointercancel", endDrag);
+
+// Lighten (amount > 0) or darken (amount < 0) a #rrggbb color toward white/black.
+function shade(hex: string, amount: number): string {
+  const m = /^#?([0-9a-f]{6})$/i.exec(hex.trim());
+  const n = m ? parseInt(m[1], 16) : 0xff5252;
+  let r = (n >> 16) & 0xff;
+  let g = (n >> 8) & 0xff;
+  let b = n & 0xff;
+  const t = amount < 0 ? 0 : 255;
+  const p = Math.abs(amount);
+  r = Math.round((t - r) * p + r);
+  g = Math.round((t - g) * p + g);
+  b = Math.round((t - b) * p + b);
+  return `rgb(${r}, ${g}, ${b})`;
+}
 
 // ---------------------------------------------------------------------------
 // Impact handling — trigger squash along a given axis.
@@ -280,7 +301,7 @@ function impact(speed: number, angle: number) {
 // ---------------------------------------------------------------------------
 function step(dt: number) {
   if (!dragging) {
-    vy += GRAVITY * dt;
+    vy += settings.gravity * dt;
 
     if (attached) {
       // Elastic string: a one-sided damped spring from the anchor.
@@ -288,14 +309,14 @@ function step(dt: number) {
       const dy = y - anchorY;
       const dist = Math.hypot(dx, dy) || 0.0001;
 
-      if (dist > STRING_LEN) {
+      if (dist > settings.stringLen) {
         const nx = dx / dist;
         const ny = dy / dist;
-        const stretch = dist - STRING_LEN;
+        const stretch = dist - settings.stringLen;
 
         // Spring pulls inward, proportional to how far it's overstretched.
-        vx -= STRING_K * stretch * nx * dt;
-        vy -= STRING_K * stretch * ny * dt;
+        vx -= settings.stringK * stretch * nx * dt;
+        vy -= settings.stringK * stretch * ny * dt;
 
         // Damp only the outward (radial) velocity so the spring doesn't boing
         // forever; tangential swing is preserved. Squash on a hard yank-back.
@@ -311,25 +332,27 @@ function step(dt: number) {
 
     if (!attached) {
       // Free ball: bounce off the window edges.
-      if (x - RADIUS < 0) {
-        x = RADIUS;
+      const r = settings.radius;
+      const e = settings.restitution;
+      if (x - r < 0) {
+        x = r;
         if (vx < 0) impact(Math.abs(vx), 0);
-        vx = -vx * RESTITUTION;
+        vx = -vx * e;
       }
-      if (x + RADIUS > W) {
-        x = W - RADIUS;
+      if (x + r > W) {
+        x = W - r;
         if (vx > 0) impact(Math.abs(vx), 0);
-        vx = -vx * RESTITUTION;
+        vx = -vx * e;
       }
-      if (y - RADIUS < 0) {
-        y = RADIUS;
+      if (y - r < 0) {
+        y = r;
         if (vy < 0) impact(Math.abs(vy), Math.PI / 2);
-        vy = -vy * RESTITUTION;
+        vy = -vy * e;
       }
-      if (y + RADIUS > H) {
-        y = H - RADIUS;
+      if (y + r > H) {
+        y = H - r;
         if (vy > 0) impact(Math.abs(vy), Math.PI / 2);
-        vy = -vy * RESTITUTION;
+        vy = -vy * e;
       }
     }
 
@@ -348,13 +371,15 @@ function step(dt: number) {
 function draw() {
   ctx.clearRect(0, 0, W, H);
 
+  const r = settings.radius;
+
   // The string: a line from the anchor to the ball's surface (only when tied).
   if (attached) {
     const dx = x - anchorX;
     const dy = y - anchorY;
     const d = Math.hypot(dx, dy) || 1;
-    const bx = x - (dx / d) * RADIUS; // attach point on the ball's surface
-    const by = y - (dy / d) * RADIUS;
+    const bx = x - (dx / d) * r; // attach point on the ball's surface
+    const by = y - (dy / d) * r;
     ctx.beginPath();
     ctx.moveTo(anchorX, anchorY);
     ctx.lineTo(bx, by);
@@ -366,7 +391,7 @@ function draw() {
     // Snapped: a short frayed stub dangling from the anchor.
     ctx.beginPath();
     ctx.moveTo(anchorX, anchorY);
-    ctx.lineTo(anchorX, anchorY + STRING_LEN * 0.12);
+    ctx.lineTo(anchorX, anchorY + settings.stringLen * 0.12);
     ctx.lineWidth = 5;
     ctx.lineCap = "round";
     ctx.strokeStyle = "rgba(30, 30, 30, 0.6)";
@@ -387,28 +412,28 @@ function draw() {
   ctx.shadowBlur = 24;
   ctx.shadowOffsetY = 10;
 
-  // Glossy radial fill.
+  // Glossy radial fill, lit from the upper-left, built from the chosen color.
   const grad = ctx.createRadialGradient(
-    -RADIUS * 0.3,
-    -RADIUS * 0.4,
-    RADIUS * 0.1,
+    -r * 0.3,
+    -r * 0.4,
+    r * 0.1,
     0,
     0,
-    RADIUS,
+    r,
   );
-  grad.addColorStop(0, "#ff8a8a");
-  grad.addColorStop(0.5, "#ff5252");
-  grad.addColorStop(1, "#c62828");
+  grad.addColorStop(0, shade(settings.color, 0.5));
+  grad.addColorStop(0.5, settings.color);
+  grad.addColorStop(1, shade(settings.color, -0.35));
 
   ctx.beginPath();
-  ctx.arc(0, 0, RADIUS, 0, Math.PI * 2);
+  ctx.arc(0, 0, r, 0, Math.PI * 2);
   ctx.fillStyle = grad;
   ctx.fill();
 
   // Specular highlight (drawn without a shadow).
   ctx.shadowColor = "transparent";
   ctx.beginPath();
-  ctx.arc(-RADIUS * 0.32, -RADIUS * 0.36, RADIUS * 0.18, 0, Math.PI * 2);
+  ctx.arc(-r * 0.32, -r * 0.36, r * 0.18, 0, Math.PI * 2);
   ctx.fillStyle = "rgba(255, 255, 255, 0.6)";
   ctx.fill();
 
@@ -416,18 +441,53 @@ function draw() {
 }
 
 // ---------------------------------------------------------------------------
-// Main loop
+// Live settings: apply broadcasts from the control center, and redraw/wake so
+// changes (size, color, gravity…) take effect immediately even while at rest.
+// ---------------------------------------------------------------------------
+listen<Settings>(SETTINGS_EVENT, (e) => {
+  settings = { ...settings, ...e.payload };
+  lastRegion = ""; // radius may have changed → force an input-region refresh
+  wake();
+});
+
+// ---------------------------------------------------------------------------
+// Main loop with idle-sleep. An always-running desktop toy shouldn't burn CPU
+// drawing a ball that's been resting for minutes, so we stop simulating once
+// everything has settled and resume on any interaction (pointer or settings).
 // ---------------------------------------------------------------------------
 let last = performance.now();
+let idleFrames = 0; // consecutive nearly-still frames
+const SLEEP_AFTER = 30; // ~0.5s of stillness before sleeping
+
+// Anything that moves the ball calls this to guarantee the loop is awake.
+function wake() {
+  idleFrames = 0;
+}
+
+function nearlyStill(): boolean {
+  // Asleep only when not being dragged, barely moving, and no squash to ease.
+  return (
+    !dragging &&
+    Math.hypot(vx, vy) < 4 &&
+    squash < 0.002 &&
+    // A free ball resting on the floor is still; a free ball mid-air is not.
+    (attached || y + settings.radius >= H - 1)
+  );
+}
+
 function frame(now: number) {
   // Clamp dt so a stall (e.g. tab throttle) doesn't fling the ball off-screen.
   let dt = (now - last) / 1000;
   last = now;
   if (dt > 0.05) dt = 0.05;
 
-  step(dt);
-  draw();
-  updateInputRegion();
+  idleFrames = nearlyStill() ? idleFrames + 1 : 0;
+
+  if (idleFrames < SLEEP_AFTER) {
+    step(dt);
+    draw();
+    updateInputRegion();
+  }
   requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);

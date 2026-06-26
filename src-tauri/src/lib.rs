@@ -1,8 +1,16 @@
 use tauri::{
-    menu::{Menu, MenuItem},
+    menu::{Menu, MenuItem, PredefinedMenuItem},
     tray::TrayIconBuilder,
-    Window,
+    Manager, Window,
 };
+
+/// Show and focus the settings window (created hidden at startup).
+fn open_settings(app: &tauri::AppHandle) {
+    if let Some(win) = app.get_webview_window("settings") {
+        let _ = win.show();
+        let _ = win.set_focus();
+    }
+}
 
 /// Restrict the window's input region to a single rectangle (the ball's
 /// bounding box, in physical pixels relative to the window). Clicks outside it
@@ -41,20 +49,34 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![set_input_region])
         .setup(|app| {
             // The window is borderless and lives in the tray, so the tray menu
-            // is the only way to quit.
+            // is the only way to reach settings or quit.
+            let settings = MenuItem::with_id(app, "settings", "Settings…", true, None::<&str>)?;
+            let sep = PredefinedMenuItem::separator(app)?;
             let quit = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
-            let menu = Menu::with_items(app, &[&quit])?;
+            let menu = Menu::with_items(app, &[&settings, &sep, &quit])?;
 
             TrayIconBuilder::new()
                 .icon(app.default_window_icon().unwrap().clone())
                 .tooltip("Fidget Toy")
                 .menu(&menu)
-                .on_menu_event(|app, event| {
-                    if event.id().as_ref() == "quit" {
-                        app.exit(0);
-                    }
+                .on_menu_event(|app, event| match event.id().as_ref() {
+                    "settings" => open_settings(app),
+                    "quit" => app.exit(0),
+                    _ => {}
                 })
                 .build(app)?;
+
+            // Closing the settings window should just hide it, not destroy it,
+            // so reopening from the tray is instant and state is preserved.
+            if let Some(settings_win) = app.get_webview_window("settings") {
+                let win = settings_win.clone();
+                settings_win.on_window_event(move |event| {
+                    if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                        api.prevent_close();
+                        let _ = win.hide();
+                    }
+                });
+            }
 
             Ok(())
         })

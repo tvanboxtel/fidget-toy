@@ -23,6 +23,20 @@
         "shadow": false,
         "maximized": true,
         "focus": false
+      },
+      {
+        "label": "settings",
+        "url": "settings.html",
+        "title": "Fidget Toy Settings",
+        "width": 380,
+        "height": 620,
+        "resizable": true,
+        "decorations": true,
+        "minimizable": true,
+        "maximizable": false,
+        "closable": true,
+        "visible": false,
+        "skipTaskbar": false
       }
     ],
     "macOSPrivateApi": true,

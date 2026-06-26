@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="stylesheet" href="/src/settings.css" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Fidget Toy Settings</title>
+    <script type="module" src="/src/settings-ui.ts" defer></script>
+  </head>
+  <body>
+    <main>
+      <h1>🔴 Fidget Toy</h1>
+      <p class="sub">Tweak the feel. Changes apply instantly.</p>
+
+      <div id="controls"></div>
+
+      <div class="row color-row">
+        <label for="color">Ball color</label>
+        <input type="color" id="color" />
+      </div>
+
+      <button id="reset" class="reset">Reset to defaults</button>
+    </main>
+  </body>
+</html>
