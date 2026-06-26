@@ -1,0 +1,28 @@
+:root {
+  color-scheme: light dark;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: transparent;
+}
+
+/* The canvas fills the whole transparent window; the ball is drawn on it. */
+#stage {
+  display: block;
+  width: 100vw;
+  height: 100vh;
+  background: transparent;
+  /* The input region is just the ball at rest, so this cursor only shows when
+     hovering the ball. JS swaps it to "grabbing" during a drag. */
+  cursor: grab;
+}
+
+#stage.grabbing {
+  cursor: grabbing;
+}
