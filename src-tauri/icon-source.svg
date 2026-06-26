@@ -1,0 +1,37 @@
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <!-- Background: soft dark rounded square so the red ball pops -->
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#3a3f4b"/>
+      <stop offset="1" stop-color="#23262e"/>
+    </linearGradient>
+
+    <!-- Glossy ball fill, lit from the upper-left -->
+    <radialGradient id="ball" cx="0.38" cy="0.34" r="0.75">
+      <stop offset="0" stop-color="#ff9a9a"/>
+      <stop offset="0.45" stop-color="#ff5252"/>
+      <stop offset="1" stop-color="#b71c1c"/>
+    </radialGradient>
+
+    <!-- Soft drop shadow under the ball -->
+    <filter id="shadow" x="-50%" y="-50%" width="200%" height="200%">
+      <feDropShadow dx="0" dy="26" stdDeviation="30" flood-color="#000000" flood-opacity="0.45"/>
+    </filter>
+  </defs>
+
+  <!-- Rounded background -->
+  <rect x="0" y="0" width="1024" height="1024" rx="224" ry="224" fill="url(#bg)"/>
+
+  <!-- The string, anchored near the top center -->
+  <line x1="512" y1="150" x2="512" y2="470" stroke="#11131a" stroke-width="22" stroke-linecap="round"/>
+  <!-- Anchor knob -->
+  <circle cx="512" cy="150" r="20" fill="#11131a"/>
+
+  <!-- The ball -->
+  <g filter="url(#shadow)">
+    <circle cx="512" cy="650" r="240" fill="url(#ball)"/>
+  </g>
+
+  <!-- Specular highlight -->
+  <ellipse cx="430" cy="560" rx="78" ry="62" fill="#ffffff" opacity="0.55"/>
+</svg>
