@@ -82,6 +82,16 @@ The ball floats on top of everything, and clicks anywhere *except* the ball pass
 
 ---
 
+## ⚙️ Settings & updates
+
+Open the **Settings** window from the tray/menu-bar icon → **Settings…**. Tweak the ball's size, color, gravity, bounciness, string length/stretch, and bat strength — changes apply instantly.
+
+At the bottom is **Check for updates**. If a newer version exists, click **Install & restart** and the app updates itself and relaunches — no re-downloading.
+
+> One-click updating works on **Windows**, **macOS**, and the Linux **AppImage**. If you installed via `.deb`/`.rpm` or built from source (Arch), the button will instead open the download page so you can grab the new version manually.
+
+---
+
 ## 🛠️ Run from source (for developers)
 
 Requires [Node.js](https://nodejs.org), [pnpm](https://pnpm.io), and the [Rust toolchain](https://rustup.rs) plus [Tauri's system dependencies](https://tauri.app/start/prerequisites/).

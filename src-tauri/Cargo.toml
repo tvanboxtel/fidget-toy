@@ -22,6 +22,12 @@ tauri = { version = "2", features = ["tray-icon", "macos-private-api"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 
+# Self-update: the updater plugin fetches the signed latest.json manifest,
+# downloads the new bundle, and swaps it in; process handles the relaunch into
+# the freshly installed version.
+tauri-plugin-updater = "2"
+tauri-plugin-process = "2"
+
 # Linux-only: used to set the window's input shape for click-through (Wayland
 # refuses to report the global cursor, so we restrict input to the ball's rect).
 # Must match the gtk version Tauri uses so gtk_window()'s type lines up.

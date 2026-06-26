@@ -6,7 +6,12 @@ import {
   loadSettings,
   saveSettings,
 } from "./settings";
-import { checkForUpdate, openReleasesPage } from "./update";
+import {
+  checkForUpdate,
+  installUpdate,
+  openReleasesPage,
+  type UpdateCheck,
+} from "./update";
 
 let settings = loadSettings();
 
@@ -83,39 +88,67 @@ resetBtn.addEventListener("click", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Check for updates. We don't auto-update (no code-signing keys); we just tell
-// the user a newer version exists and the button then opens the download page.
+// Check for updates. Tauri's updater installs the new signed bundle in place
+// and relaunches — one click, no terminal. If the install fails (e.g. a target
+// that can't self-update, like .deb/.rpm or a from-source build), we fall back
+// to opening the download page.
 // ---------------------------------------------------------------------------
 const updateBtn = document.getElementById("check-update") as HTMLButtonElement;
 const updateStatus = document.getElementById("update-status")!;
 
-// Tracks whether clicking the button checks (default) or opens the download
-// page (after an update has been found).
-let openOnClick = false;
+// What the next click does. "check" → look for an update; "install" → download
+// + install the one we found; "open" → fallback to the download page.
+let mode: "check" | "install" | "open" = "check";
+let pending: Extract<UpdateCheck, { state: "available" }> | null = null;
+
+function setStatus(cls: string, text: string) {
+  updateStatus.className = `update-status${cls ? " " + cls : ""}`;
+  updateStatus.textContent = text;
+}
 
 updateBtn.addEventListener("click", async () => {
-  if (openOnClick) {
+  if (mode === "open") {
     openReleasesPage();
     return;
   }
 
+  if (mode === "install" && pending) {
+    updateBtn.disabled = true;
+    setStatus("available", "Downloading…");
+    try {
+      await installUpdate(pending.update, (done, total) => {
+        const pct = total ? Math.round((done / total) * 100) : null;
+        setStatus("available", pct === null ? "Downloading…" : `Downloading… ${pct}%`);
+      });
+      // On success the app relaunches; we won't get here.
+    } catch (e) {
+      // Can't self-update on this target — send them to the download page.
+      mode = "open";
+      updateBtn.disabled = false;
+      updateBtn.textContent = "Open download page →";
+      setStatus(
+        "error",
+        `Couldn't auto-install (${e instanceof Error ? e.message : e}). Get it manually:`,
+      );
+    }
+    return;
+  }
+
+  // mode === "check"
   updateBtn.disabled = true;
-  updateStatus.className = "update-status";
-  updateStatus.textContent = "Checking…";
+  setStatus("", "Checking…");
 
   const result = await checkForUpdate();
   updateBtn.disabled = false;
 
   if (result.state === "available") {
-    openOnClick = true;
-    updateBtn.textContent = `Get ${result.latest} →`;
-    updateStatus.className = "update-status available";
-    updateStatus.textContent = `Update available (you have v${result.version}).`;
+    mode = "install";
+    pending = result;
+    updateBtn.textContent = `Install v${result.latest} & restart`;
+    setStatus("available", `Update available (you have v${result.version}).`);
   } else if (result.state === "current") {
-    updateStatus.className = "update-status ok";
-    updateStatus.textContent = `You're up to date (v${result.version}).`;
+    setStatus("ok", `You're up to date (v${result.version}).`);
   } else {
-    updateStatus.className = "update-status error";
-    updateStatus.textContent = `Couldn't check: ${result.message}`;
+    setStatus("error", `Couldn't check: ${result.message}`);
   }
 });
