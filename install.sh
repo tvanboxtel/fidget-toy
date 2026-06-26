@@ -41,13 +41,18 @@ case "$OS" in
     [ -n "$url" ] || fail "No macOS (.dmg) build found in the latest release."
 
     tmp="$(mktemp -d)"
-    trap 'rm -rf "$tmp"; [ -n "${mnt:-}" ] && hdiutil detach "$mnt" -quiet 2>/dev/null || true' EXIT
+    mnt="$tmp/mnt"
+    mkdir -p "$mnt"
+    trap 'hdiutil detach "$mnt" -quiet 2>/dev/null || true; rm -rf "$tmp"' EXIT
     info "Downloading $(basename "$url")…"
     curl -fSL "$url" -o "$tmp/app.dmg"
 
     info "Mounting…"
-    mnt="$(hdiutil attach "$tmp/app.dmg" -nobrowse -quiet | grep -o '/Volumes/.*' | head -n1)"
-    [ -n "$mnt" ] || fail "Couldn't mount the disk image."
+    # Mount to a path we control instead of parsing hdiutil's output (which
+    # -quiet suppresses, and pipefail would then abort on). -nobrowse keeps it
+    # out of Finder.
+    hdiutil attach "$tmp/app.dmg" -nobrowse -mountpoint "$mnt" >/dev/null \
+      || fail "Couldn't mount the disk image."
 
     app="$(find "$mnt" -maxdepth 1 -name '*.app' | head -n1)"
     [ -n "$app" ] || fail "No .app found inside the disk image."
